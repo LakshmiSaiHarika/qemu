@@ -25,6 +25,7 @@
 #include "qemu/cutils.h"
 #include "qemu/chardev_open.h"
 #include "pci.h"
+#include "sysemu/kvm.h"
 
 static int iommufd_cdev_map(const VFIOContainerBase *bcontainer, hwaddr iova,
                             ram_addr_t size, void *vaddr, bool readonly)
@@ -99,6 +100,23 @@ static int iommufd_cdev_connect_and_bind(VFIODevice *vbasedev, Error **errp)
     vbasedev->devid = bind.out_devid;
     trace_iommufd_cdev_connect_and_bind(bind.iommufd, vbasedev->name,
                                         vbasedev->fd, vbasedev->devid);
+
+    if (kvm_state && vbasedev->tee_io) {
+        struct iommu_option io = {
+            .size = sizeof(io),
+            .option_id = IOMMU_OPTION_KVM,
+            .op = IOMMU_OPTION_OP_SET,
+            .object_id = 0, // not used
+            .val64 = kvm_vmfd(kvm_state),
+        };
+
+        int ret1 = ioctl(iommufd->fd, IOMMU_OPTION, &io);
+        if (ret1) {
+            error_setg_errno(errp, errno, "error setting kvmfd=%lld to iommufd=%d, ret=%d errno=%d",
+                             io.val64, iommufd->fd, ret1, errno);
+        }
+    }
+
     return ret;
 err_bind:
     iommufd_cdev_kvm_device_del(vbasedev);
