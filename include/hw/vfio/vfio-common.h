@@ -126,6 +126,7 @@ typedef struct VFIODevice {
     bool dirty_tracking;
     int devid;
     IOMMUFDBackend *iommufd;
+    bool tee_io;
 } VFIODevice;
 
 struct VFIODeviceOps {
