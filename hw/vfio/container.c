@@ -851,6 +851,7 @@ static int vfio_get_device(VFIOGroup *group, const char *name,
     }
 
     vbasedev->fd = fd;
+    vbasedev->tsm_bound_fd = -1;
     vbasedev->group = group;
     QLIST_INSERT_HEAD(&group->device_list, vbasedev, next);
 
@@ -873,6 +874,9 @@ static void vfio_put_base_device(VFIODevice *vbasedev)
     QLIST_REMOVE(vbasedev, next);
     vbasedev->group = NULL;
     trace_vfio_put_base_device(vbasedev->fd);
+    if (vbasedev->tsm_bound_fd >= 0) {
+        close(vbasedev->tsm_bound_fd);
+    }
     close(vbasedev->fd);
 }
 

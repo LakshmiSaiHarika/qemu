@@ -1428,6 +1428,51 @@ int vfio_kvm_device_del_fd(int fd, Error **errp)
     return 0;
 }
 
+int vfio_tee_io_bind(VFIODevice *vbasedev, int32_t guest_rid)
+{
+    int rc = -ENOTSUP;
+#if 0
+    /* KVM need to be set for the VFIO IOMMU group for the below to succeed */
+
+    struct vfio_device_tsm_bind param = {
+        .argsz = sizeof(param),
+        .flags = 0,
+        .guest_rid = guest_rid,
+    };
+
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
+    rc = ioctl(vbasedev->fd, VFIO_DEVICE_TSM_BIND, &param);
+    if (rc < 0) {
+        error_report("vfio: failed to bind TEE IO dev %X fd=%d to CoCo VM: %s",
+                     param.guest_rid, vbasedev->fd, strerror(errno));
+        return rc;
+    }
+    vbasedev->tsm_bound_fd = rc;
+#else
+#ifdef CONFIG_KVM
+    struct kvm_vfio_tsm_bind param = {
+        .guest_rid = guest_rid,
+        .devfd = vbasedev->fd,
+    };
+    struct kvm_device_attr attr = {
+        .group = KVM_DEV_VFIO_DEVICE,
+        .attr = KVM_DEV_VFIO_DEVICE_TDI_BIND,
+        .addr = (uint64_t)(unsigned long)&param,
+    };
+
+    rc = ioctl(vfio_kvm_device_fd, KVM_SET_DEVICE_ATTR, &attr);
+    if (rc < 0) {
+        error_report("vfio: failed to bind TEE IO dev %X fd=%d to CoCo VM: %s",
+                     param.guest_rid, param.devfd, strerror(errno));
+        return rc;
+    }
+    vbasedev->tsm_bound_fd = rc;
+#endif
+#endif
+    trace_vfio_tee_io_bind(vbasedev->name, vbasedev->fd, vbasedev->tsm_bound_fd);
+    return 0;
+}
+
 VFIOAddressSpace *vfio_get_address_space(AddressSpace *as)
 {
     VFIOAddressSpace *space;
